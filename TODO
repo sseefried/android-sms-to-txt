@@ -1,0 +1,4 @@
+* Add command line argument for "your" name
+* Use 'adb' to get the files from the phone.
+* Think about adding an optional country code replace function. e.g. "+61" to "0"
+* Think about alternative orderings.

@@ -1,53 +1,49 @@
 require 'rubygems'
-require 'mktemp'
-require 'csv'
+require 'sqlite3'
+
+
 
 YOU = "Sean"
-# HUGE HACK. Need to choose a quote char that doesn't appear in any of the texts!
-QUOTE_CHAR = "`"
+
+SMS_DB = "mmssms.db"
+CONTACTS_DB = "contacts.db"
+
+(puts "#{SMS_DB} does not exist"; exit 1)      unless File.exist?(SMS_DB)
+(puts "#{CONTACTS_DB} does not exist"; exit 1) unless File.exist?(CONTACTS_DB)
+
+##########################################
+## Constants
+
+ADDRESS, PERSON, DATE, TYPE, BODY = 0,1,2,3,4
+
+NAME=1
+
+IS_REPLY = 2 # A magic number used in the 'type' field of the 'sms' table
 
 ########################################
 
-file = MkTemp::tmpnam("smses.csvXXXX")
-system(%Q{(echo "select * from sms;" | sqlite3 mmssms.db) > #{file}})
+db = SQLite3::Database.new(SMS_DB)
+smses = db.execute("select address, person, date, type, body from sms;")
 
-smses = []
-CSV.foreach(file, {:col_sep => "|", :quote_char => QUOTE_CHAR}) do |row|
-  smses << row
-end
-File.unlink(file)
-
-file = MkTemp::tmpnam("people.csvXXXX")
-system(%Q{(echo "select * from raw_contacts;" | sqlite3 contacts.db) > #{file}})
-
-NAME=15
+db = SQLite3::Database.new(CONTACTS_DB)
+rows = db.execute("select _id, display_name from raw_contacts;")
 
 people = {}
-CSV.foreach(file, {:col_sep => "|", :quote_char => QUOTE_CHAR}) do |row|
+rows.each do |row|
   people[row[0].to_i] = row[NAME]
-
 end
-File.unlink(file)
-
-
-TO=2
-PERSON=3
-TIME=4
-DATE=4
-TYPE=9
-BODY=12
-IS_REPLY = "2"
 
 threads = {}
 
 smses.each do |sms|
-  key = sms[TO].to_s.gsub(/\+61/,"0")
+  key = sms[ADDRESS] # .to_s.gsub(/\+61/,"0")
   threads[key] ||= { :messages => []}
   person_id = sms[PERSON].to_i
   if person_id != 0
     threads[key][:name] = people[person_id]
   end
-  threads[key][:messages] << { :time => Time.at(sms[TIME].to_i/1000), :body => sms[BODY], :reply => sms[TYPE] == IS_REPLY}
+  threads[key][:messages] << { :time => Time.at(sms[DATE].to_i/1000), :body => sms[BODY],
+                               :reply => sms[TYPE] == IS_REPLY}
 end
 
 threads = threads.to_a
